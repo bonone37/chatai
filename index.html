@@ -64,9 +64,6 @@
     </div>
 
     <script>
-        const DEEPSEEK_API_KEY = 'sk-e778ebc7ccc64bcf82bcb1e05b5e0eab';
-        const API_URL = 'https://api.deepseek.com/v1/chat/completions';
-        
         // 存储对话历史
         let conversationHistory = [];
         let allConversations = [];
@@ -238,17 +235,13 @@
             chatContainer.scrollTop = chatContainer.scrollHeight;
 
             try {
-                const response = await fetch(API_URL, {
+                const response = await fetch('/api/chat', {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${DEEPSEEK_API_KEY}`
+                        'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
-                        model: "deepseek-chat",
-                        messages: conversationHistory,
-                        temperature: 0.7,
-                        max_tokens: 2000
+                        messages: conversationHistory
                     })
                 });
 
