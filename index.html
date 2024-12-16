@@ -195,6 +195,8 @@
             });
         }
 
+        const API_URL = 'https://your-worker.your-subdomain.workers.dev';  // 替换为你的 Worker URL
+
         async function sendMessage() {
             const input = document.getElementById('messageInput');
             const message = input.value.trim();
@@ -235,18 +237,21 @@
             chatContainer.scrollTop = chatContainer.scrollHeight;
 
             try {
-                const response = await fetch('/api/chat', {
+                const response = await fetch(API_URL, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
-                        messages: conversationHistory
+                        model: "deepseek-chat",
+                        messages: conversationHistory,
+                        temperature: 0.7,
+                        max_tokens: 2000
                     })
                 });
 
                 if (!response.ok) {
-                    throw new Error('API 请求失败');
+                    throw new Error(`API 请求失败: ${response.status}`);
                 }
 
                 const data = await response.json();
@@ -280,7 +285,7 @@
                 const errorMessage = `
                     <div class="message ai error">
                         <div class="avatar">AI</div>
-                        <div class="text">抱歉，发生了一些错误，请稍后再试。</div>
+                        <div class="text">抱歉，发生了一些错误，请稍后再试。错误信息：${error.message}</div>
                     </div>
                 `;
                 chatContainer.insertAdjacentHTML('beforeend', errorMessage);
