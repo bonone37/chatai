@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Chat Assistant</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.8.0/styles/github.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.8.0/lib/highlight.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <nav class="navbar">
+            <div class="logo" onclick="backToHome()" style="cursor: pointer;">AI Chat</div>
+        </nav>
+
+        <!-- 首页内容 -->
+        <main class="hero" id="homepage">
+            <h1>智能AI助手</h1>
+            <p class="subtitle">即时对话，智能解答，开启AI对话新体验</p>
+            <button class="start-chat-btn" onclick="showChat()">开始对话</button>
+            
+            <div class="features">
+                <div class="feature-card">
+                    <div class="icon">🚀</div>
+                    <h3>即时响应</h3>
+                    <p>毫秒级回复</p>
+                </div>
+                <div class="feature-card">
+                    <div class="icon">🔒</div>
+                    <h3>安全可靠</h3>
+                    <p>隐私保护</p>
+                </div>
+            </div>
+        </main>
+
+        <!-- 聊天界面 -->
+        <div class="chat-interface hidden" id="chatInterface">
+            <div class="sidebar">
+                <button class="new-chat-btn" onclick="startNewChat()">
+                    <span class="plus-icon">+</span> 新对话
+                </button>
+                <div class="history-list">
+                    <div class="history-title">历史对话</div>
+                    <div id="chatHistoryList">
+                        <!-- 历史对话将在这里动态添加 -->
+                    </div>
+                </div>
+            </div>
+            <div class="chat-main">
+                <div class="chat-container">
+                    <div class="message ai">
+                        <div class="avatar">AI</div>
+                        <div class="text">你好！我是你的AI助手，有什么我可以帮你的吗？</div>
+                    </div>
+                </div>
+                <div class="input-container">
+                    <input type="text" placeholder="输入你的问题..." id="messageInput">
+                    <button class="send-btn" onclick="sendMessage()">发送</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const DEEPSEEK_API_KEY = 'sk-e778ebc7ccc64bcf82bcb1e05b5e0eab';
+        const API_URL = 'https://api.deepseek.com/v1/chat/completions';
+        
+        // 存储对话历史
+        let conversationHistory = [];
+        let allConversations = [];
+        let currentConversationId = null;
+
+        // 配置 marked
+        marked.setOptions({
+            highlight: function(code, language) {
+                if (language && hljs.getLanguage(language)) {
+                    return hljs.highlight(code, { language }).value;
+                }
+                return code;
+            },
+            breaks: true
+        });
+
+        function showChat() {
+            document.getElementById('homepage').classList.add('hidden');
+            document.getElementById('chatInterface').classList.remove('hidden');
+            if (!currentConversationId) {
+                startNewChat();
+            }
+        }
+
+        function startNewChat() {
+            // 保存当前对话
+            if (conversationHistory.length > 0) {
+                saveCurrentChat();
+            }
+
+            // 清空当前对话
+            conversationHistory = [];
+            currentConversationId = Date.now();
+            
+            // 清空聊天界面
+            const chatContainer = document.querySelector('.chat-container');
+            chatContainer.innerHTML = `
+                <div class="message ai">
+                    <div class="avatar">AI</div>
+                    <div class="text">你好！我是你的AI助手，有什么我可以帮你的吗？</div>
+                </div>
+            `;
+
+            // 更新历史列表选中状态
+            updateHistoryList();
+        }
+
+        function saveCurrentChat() {
+            if (conversationHistory.length > 0) {
+                // 使用第一条用户消息作为对话标题
+                const firstUserMessage = conversationHistory.find(msg => msg.role === 'user');
+                const title = firstUserMessage 
+                    ? firstUserMessage.content.substring(0, 20) + "..."
+                    : "新对话";
+                    
+                const chat = {
+                    id: currentConversationId,
+                    title: title,
+                    messages: [...conversationHistory],
+                    timestamp: new Date().toLocaleString()
+                };
+                
+                // 更新或添加到历史记录
+                const existingIndex = allConversations.findIndex(c => c.id === chat.id);
+                if (existingIndex >= 0) {
+                    allConversations[existingIndex] = chat;
+                } else {
+                    allConversations.unshift(chat);
+                }
+                
+                // 保存到本地存储
+                localStorage.setItem('chatHistory', JSON.stringify(allConversations));
+                updateHistoryList();
+            }
+        }
+
+        function loadChat(chat) {
+            // 保存当前对话
+            if (conversationHistory.length > 0) {
+                saveCurrentChat();
+            }
+            
+            // 加载选中的对话
+            currentConversationId = chat.id;
+            conversationHistory = [...chat.messages];
+            
+            // 更新聊天界面
+            const chatContainer = document.querySelector('.chat-container');
+            chatContainer.innerHTML = '';
+            
+            conversationHistory.forEach(msg => {
+                const messageHtml = `
+                    <div class="message ${msg.role === 'user' ? 'user' : 'ai'}">
+                        <div class="avatar">${msg.role === 'user' ? '我' : 'AI'}</div>
+                        <div class="text">${msg.role === 'assistant' ? marked.parse(msg.content) : msg.content}</div>
+                    </div>
+                `;
+                chatContainer.insertAdjacentHTML('beforeend', messageHtml);
+            });
+        }
+
+        function updateHistoryList() {
+            const historyList = document.getElementById('chatHistoryList');
+            historyList.innerHTML = '';
+            
+            allConversations.forEach(chat => {
+                const chatElement = document.createElement('div');
+                chatElement.className = 'chat-history-item';
+                if (chat.id === currentConversationId) {
+                    chatElement.classList.add('active');
+                }
+                
+                chatElement.innerHTML = `
+                    <span class="icon">💭</span>
+                    <div class="chat-info">
+                        <div class="title">${chat.title}</div>
+                        <div class="timestamp">${chat.timestamp}</div>
+                    </div>
+                    <button class="delete-chat" onclick="deleteChat(event, ${chat.id})">🗑️</button>
+                `;
+                
+                chatElement.onclick = (e) => {
+                    // 如果点击的是删除按钮，不要触发加载对话
+                    if (!e.target.classList.contains('delete-chat')) {
+                        loadChat(chat);
+                    }
+                };
+                historyList.appendChild(chatElement);
+            });
+        }
+
+        async function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
+            
+            if (!message) return;
+
+            // 禁用输入
+            setInputState(true);
+
+            const chatContainer = document.querySelector('.chat-container');
+            
+            // 添加用户消息到界面
+            const userMessage = `
+                <div class="message user">
+                    <div class="text">${message}</div>
+                    <div class="avatar">我</div>
+                </div>
+            `;
+            chatContainer.insertAdjacentHTML('beforeend', userMessage);
+            
+            // 清空输入框
+            input.value = '';
+
+            // 添加用户消息到历史记录
+            conversationHistory.push({
+                role: "user",
+                content: message
+            });
+
+            // 显示加载状态
+            const loadingMessage = `
+                <div class="message ai" id="loading-message">
+                    <div class="avatar">AI</div>
+                    <div class="text">正在思考...</div>
+                </div>
+            `;
+            chatContainer.insertAdjacentHTML('beforeend', loadingMessage);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+
+            try {
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${DEEPSEEK_API_KEY}`
+                    },
+                    body: JSON.stringify({
+                        model: "deepseek-chat",
+                        messages: conversationHistory,
+                        temperature: 0.7,
+                        max_tokens: 2000
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error('API 请求失败');
+                }
+
+                const data = await response.json();
+                const aiResponse = data.choices[0].message.content;
+
+                // 移除加载消息
+                document.getElementById('loading-message').remove();
+
+                // 添加 AI 回复到界面（使用 marked 渲染 markdown）
+                const aiMessage = `
+                    <div class="message ai">
+                        <div class="avatar">AI</div>
+                        <div class="text">${marked.parse(aiResponse)}</div>
+                    </div>
+                `;
+                chatContainer.insertAdjacentHTML('beforeend', aiMessage);
+
+                // 添加 AI 回复到历史记录
+                conversationHistory.push({
+                    role: "assistant",
+                    content: aiResponse
+                });
+
+                // 保存对话
+                saveCurrentChat();
+
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('loading-message').remove();
+                
+                const errorMessage = `
+                    <div class="message ai error">
+                        <div class="avatar">AI</div>
+                        <div class="text">抱歉，发生了一些错误，请稍后再试。</div>
+                    </div>
+                `;
+                chatContainer.insertAdjacentHTML('beforeend', errorMessage);
+            }
+
+            // 启用输入
+            setInputState(false);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        // 支持按回车发送消息
+        document.getElementById('messageInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+
+        function setInputState(disabled) {
+            const input = document.getElementById('messageInput');
+            const sendButton = document.querySelector('.send-btn');
+            input.disabled = disabled;
+            sendButton.disabled = disabled;
+        }
+
+        // 在页面加载时从本地存储加载历史记录
+        document.addEventListener('DOMContentLoaded', () => {
+            const savedHistory = localStorage.getItem('chatHistory');
+            if (savedHistory) {
+                allConversations = JSON.parse(savedHistory);
+                updateHistoryList();
+            }
+        });
+
+        // 添加返回主页函数
+        function backToHome() {
+            document.getElementById('chatInterface').classList.add('hidden');
+            document.getElementById('homepage').classList.remove('hidden');
+        }
+
+        // 添加删除对话的函数
+        function deleteChat(event, chatId) {
+            event.stopPropagation(); // 阻止事件冒泡
+            
+            if (confirm('确定要删除这个对话吗？')) {
+                // 如果删除的是当前对话，清空当前对话
+                if (chatId === currentConversationId) {
+                    conversationHistory = [];
+                    currentConversationId = null;
+                    const chatContainer = document.querySelector('.chat-container');
+                    chatContainer.innerHTML = `
+                        <div class="message ai">
+                            <div class="avatar">AI</div>
+                            <div class="text">你好！我是你的AI助手，有什么我可以帮你的吗？</div>
+                        </div>
+                    `;
+                }
+                
+                // 从历史记录中删除
+                allConversations = allConversations.filter(chat => chat.id !== chatId);
+                
+                // 更新本地存储
+                localStorage.setItem('chatHistory', JSON.stringify(allConversations));
+                
+                // 更新界面
+                updateHistoryList();
+            }
+        }
+    </script>
+</body>
+</html> 
